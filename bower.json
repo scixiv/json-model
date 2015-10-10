@@ -1,0 +1,27 @@
+{
+  "name": "json_model",
+  "version": "0.0.1",
+  "authors": [
+    "hardywu <hardy0wu@gmail.com>"
+  ],
+  "description": "a json serializer/deserializer that compatible with JSON-API 1.0 (jsonapi.org)",
+  "main": "json_model.ts",
+  "moduleType": [
+    "es6"
+  ],
+  "keywords": [
+    "json",
+    "api",
+    "1.0"
+  ],
+  "license": "MIT",
+  "homepage": "",
+  "private": true,
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ]
+}
