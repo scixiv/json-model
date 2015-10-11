@@ -12,24 +12,47 @@ export function assign(tar: Object, src: Object): Object {
   return tar;
 }
 
+// Parse Resource Object
 export function resourcify(targ: any, resObj: any) {
+  if (typeof(resObj) == undefined || resObj == null) {
+    targ = undefined;
+    return
+  }
+
   if (targ.type !== resObj.type) {
     throw 'source type not match: ' + resObj.type + ' != ' + targ.type;
   }
 
   if (resObj.hasOwnProperty('attributes')) {
     assign(targ, resObj.attributes);
-    targ.id = resObj.id;
   }
 
   if (resObj.hasOwnProperty('relationships')) {
     setRaltion(targ, resObj.relationships);
   }
 
+  targ.id = resObj.id;
   return targ;
 }
 
-function includify (relats, list) {
+interface Resource {
+  id: string;
+  type: string;
+  attributes?: any;
+  relationships?: any;
+  links?: any;
+}
+
+interface Resources {
+  [index: number]: Resource;
+}
+
+interface Included {
+  [index: string]: Resource;
+}
+
+// Assign Included Resource Objects List to Relationships Object
+function includify (relats, list: any) {
   for (var key in relats) {
     if (relats[key].data instanceof Array) {
       for (var i =0; i < relats[key].data.length; i++) {
@@ -41,7 +64,10 @@ function includify (relats, list) {
   }
 }
 
-function fetchFromList(item, list) {
+function fetchFromList(item, list: any) {
+  if (typeof(item) == undefined || item == null) {
+    return
+  }
   for (var i = 0; i < list.length; i++) {
     if (list[i].id === item.id && list[i].type === item.type) {
       assign(item, list[i]);
@@ -67,7 +93,7 @@ function setRaltion(targ, relats) {
 
 export function decodeSingle(targ: any, jsonObj: any) {
   if (!jsonObj.hasOwnProperty('data')) {
-    throw 'invalid json: missing top "data" attribute';
+    throw 'invalid single json: missing top "data" attribute';
   }
 
   if (jsonObj.hasOwnProperty('included')) {
@@ -79,8 +105,10 @@ export function decodeSingle(targ: any, jsonObj: any) {
 
 export function decodeList(collections: any, model: any, jsonList: any) {
   if (!jsonList.hasOwnProperty('data')) {
-    throw 'invalid json: missing top "data" attribute';
+    throw 'invalid list json: missing top "data" attribute';
   }
+
+  collections.splice(0, collections.length);
 
   for (var i = 0; i < jsonList.data.length; i++) {
     var one = new model();
@@ -159,34 +187,43 @@ export class Base {
     var self: any = this;
     var reqConf: ng.IRequestConfig = {method: undefined, url: undefined};
     if (typeof self.id !== 'undefined') {
-      reqConf.method = 'UPDATE';
+      reqConf.method = 'PATCH';
       reqConf.url = self.url + '/' + self.id;
     } else {
       reqConf.method = 'POST';
       reqConf.url = self.url;
     }
     reqConf.data = self.$encode();
-    console.log('reqConf.dat', self.$encode());
-    self.$http(reqConf).then( function(res: any) {
-      self.$decode(res.data);
+    self.$http(reqConf).then(function(res: any) {
+      if (reqConf.method == 'POST') {
+        self.$decode(res.data);
+      }
 
       if (self.$callbacks.hasOwnProperty('afterSave')) {
         for (var key in self.$callbacks.afterSave) {
           self.$callbacks.afterSave[key](self, res);
         }
       }
+    }, function (err: any) {
+      console.log('save err', err);
     })
   }
 
-  static $search() {
+  static $search(params: any) {
     var reqConf: ng.IRequestConfig = {method: undefined, url: undefined};
-    reqConf.method = 'GET';
-    reqConf.url = this.prototype.url;
     var self: any = this;
     var collections: any = [];
+
+    reqConf.method = 'GET';
+    reqConf.params = params;
+    reqConf.url = this.prototype.url;
     collections.$model = this;
+
     this.prototype.$http(reqConf).then( function(res: any) {
       decodeList(collections, self, res.data);
+    }, function (err) {
+      console.log('search err', err);
+      console.log('search err obj', self);
     });
 
     return collections;
@@ -215,8 +252,21 @@ export class Base {
       }
     });
 
-
     return this;
+  }
+
+  $destroy() {
+    var reqConf: ng.IRequestConfig = {method: undefined, url: undefined};
+    reqConf.method = 'DELETE';
+    reqConf.url = this.url + '/' + this.id;
+    var self: any = this;
+    this.$http(reqConf).then( function(res: any) {
+      if (self.$callbacks.hasOwnProperty('afterDestroy')) {
+        for (var key in self.$callbacks.afterDestroy) {
+          self.$callbacks.afterDestroy[key](self, res);
+        }
+      }
+    });
   }
 
   $encode() {
