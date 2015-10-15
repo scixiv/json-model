@@ -12,7 +12,7 @@ export function assign(tar: Object, src: Object): Object {
   return tar;
 }
 
-// Parse Resource Object
+// parse Resource Object
 export function resourcify(targ: any, resObj: any) {
   if (typeof(resObj) == undefined || resObj == null) {
     targ = undefined;
@@ -51,7 +51,7 @@ interface Included {
   [index: string]: Resource;
 }
 
-// Assign Included Resource Objects List to Relationships Object
+// assign Included Resource Objects List to Relationships Object
 function includify (relats, list: any) {
   for (var key in relats) {
     if (relats[key].data instanceof Array) {
@@ -81,8 +81,10 @@ function setRaltion(targ, relats) {
       continue;
     }
     if (targ.$relationships[key].list) {
-      if (!targ[key]) { targ[key]= []; }
-      decodeList(targ[key], targ.$relationships[key].model, relats[key]);
+      if (!targ[key]) {
+        targ[key] = new Collection(targ.$relationships[key].model);
+      }
+      decodeList(targ[key], relats[key]);
 
     } else {
       targ[key] = new targ.$relationships[key].model();
@@ -98,12 +100,21 @@ export function decodeSingle(targ: any, jsonObj: any) {
 
   if (jsonObj.hasOwnProperty('included')) {
     includify(jsonObj.data.relationships, jsonObj.included);
+    targ.$included = jsonObj.included;
+  }
+
+  if (jsonObj.hasOwnProperty('links')) {
+    targ.$links = jsonObj.links;
+  }
+
+  if (jsonObj.hasOwnProperty('meta')) {
+    targ.$meta = jsonObj.meta;
   }
 
   resourcify(targ, jsonObj.data);
 }
 
-export function decodeList(collections: any, model: any, jsonList: any) {
+export function decodeList(collections: any, jsonList: any) {
   if (!jsonList.hasOwnProperty('data')) {
     throw 'invalid list json: missing top "data" attribute';
   }
@@ -111,17 +122,23 @@ export function decodeList(collections: any, model: any, jsonList: any) {
   collections.splice(0, collections.length);
 
   for (var i = 0; i < jsonList.data.length; i++) {
-    var one = new model();
+    var one = new collections.$model();
     resourcify(one, jsonList.data[i]);
     collections.unshift(one);
   }
 
-  collections.$model = model;
+  if (jsonList.hasOwnProperty('links')) {
+    collections.$links = jsonList.links;
+  }
+
+  if (jsonList.hasOwnProperty('meta')) {
+    collections.$meta = jsonList.meta;
+  }
 
   return collections;
 }
 
-export function encode(src: any): Object {
+export function encodeSingle(src: any): Object {
   var jsonObj: any;
   jsonObj = {
     data: {attributes: {}, relationships: {}}
@@ -153,19 +170,34 @@ export function encode(src: any): Object {
   return  jsonObj;
 }
 
+export function encodeList(src: any): Object {
+  var jsonObj: any = { data: [] };
+
+  for (var i = 0; i < src.length; i ++) {
+    jsonObj.data.push(encodeSingle(src[i]));
+  }
+
+  return  jsonObj;
+}
 
 export class Base {
   id: string;
   url: string;
   type: string;
-  $http: ng.IHttpService;
+  $http: any;
   public $relationships;
   public $callbacks;
+  public $scope;
+  $then;
+  $included;
+  $links;
+  $meta;
 
   constructor(id: number|string) {
     if (id) { this.id = id.toString(); }
-    this.$callbacks  = {};
-    assign(this.$callbacks, this.$callbacks);
+    var $callbacks: any = {};
+    assign($callbacks, this.$callbacks);
+    this.$callbacks = $callbacks;
     for (var key in this.$relationships) {
       if (this.$relationships[key].list) {
         this[key] = []
@@ -183,12 +215,16 @@ export class Base {
     this.$callbacks[hook].unshift(func);
   }
 
+  $url() {
+    return this.url + '/' + this.id;
+  }
+
   $save() {
     var self: any = this;
-    var reqConf: ng.IRequestConfig = {method: undefined, url: undefined};
+    var reqConf: any = {method: undefined, url: undefined};
     if (typeof self.id !== 'undefined') {
       reqConf.method = 'PATCH';
-      reqConf.url = self.url + '/' + self.id;
+      reqConf.url = self.$url();
     } else {
       reqConf.method = 'POST';
       reqConf.url = self.url;
@@ -210,23 +246,26 @@ export class Base {
   }
 
   static $search(params: any) {
-    var reqConf: ng.IRequestConfig = {method: undefined, url: undefined};
+    var reqConf: any = {method: undefined, url: undefined};
     var self: any = this;
-    var collections: any = [];
+    var collections: any = new Collection(this);
 
     reqConf.method = 'GET';
     reqConf.params = params;
     reqConf.url = this.prototype.url;
-    collections.$model = this;
 
     this.prototype.$http(reqConf).then( function(res: any) {
-      decodeList(collections, self, res.data);
+      decodeList(collections, res.data);
     }, function (err) {
       console.log('search err', err);
       console.log('search err obj', self);
     });
 
     return collections;
+  }
+
+  static $collection() {
+    return new Collection(this);
   }
 
   static $find(id: number|string) {
@@ -238,11 +277,11 @@ export class Base {
 
 
   $fetch() {
-    var reqConf: ng.IRequestConfig = {method: undefined, url: undefined};
+    var reqConf: any = {method: undefined, url: undefined};
     reqConf.method = 'GET';
-    reqConf.url = this.url + '/' + this.id;
+    reqConf.url = this.$url();
     var self: any = this;
-    this.$http(reqConf).then( function(res: any) {
+    this.$then = this.$http(reqConf).then( function(res: any) {
       self.$decode(res.data);
 
       if (self.$callbacks.hasOwnProperty('afterFetch')) {
@@ -256,9 +295,9 @@ export class Base {
   }
 
   $destroy() {
-    var reqConf: ng.IRequestConfig = {method: undefined, url: undefined};
+    var reqConf: any = {method: undefined, url: undefined};
     reqConf.method = 'DELETE';
-    reqConf.url = this.url + '/' + this.id;
+    reqConf.url = this.$url();
     var self: any = this;
     this.$http(reqConf).then( function(res: any) {
       if (self.$callbacks.hasOwnProperty('afterDestroy')) {
@@ -270,12 +309,73 @@ export class Base {
   }
 
   $encode() {
-    return encode(this)
+    return encodeSingle(this)
   }
 
   $decode(json) {
     return decodeSingle(this, json)
   }
-};
+
+  $reveal() {
+    if (typeof this.$scope == 'Array') {
+      this.$scope.push(this);
+    }
+  }
+
+  $addRelation(relationLink) {
+    var self: any = self;
+    var reqConf: any = { method: 'PATCH', url: relationLink };
+    reqConf.data = [self.$encode()];
+    self.$http(reqConf).then( function(res: any) {
+      if (self.$callbacks.hasOwnProperty('afterSaveRelation')) {
+        for (var key in self.$callbacks.afterSaveRelation) {
+          self.$callbacks.afterSaveRelation[key](self, res);
+        }
+      }
+    }, function (err) {
+      if (self.$callbacks.hasOwnProperty('afterSaveRelationError')) {
+        for (var key in self.$callbacks.afterSaveRelationError) {
+          self.$callbacks.afterSaveRelationError[key](self, err);
+        }
+      }
+    });
+  }
+
+  $deleteRelation(relationLink) {
+    var self: any = this;
+    var reqConf: any = { method: 'DELETE', url: relationLink };
+    reqConf.data = [self.$encode()];
+
+    self.$http(reqConf).then( function(res: any) {
+      if (self.$callbacks.hasOwnProperty('afterDestroyRelation')) {
+        for (var key in self.$callbacks.afterDestroyRelation) {
+          self.$callbacks.afterDestroyRelation[key](self, res);
+        }
+      }
+    }, function (err) {
+      if (self.$callbacks.hasOwnProperty('afterDestroyRelationError')) {
+        for (var key in self.$callbacks.afterDestroyRelationError) {
+          self.$callbacks.afterDestroyRelationError[key](self, err);
+        }
+      }
+    });
+  }
+}
 
 Base.prototype.$callbacks = {afterSave: []};
+
+class Collection extends Array<Base> {
+  public $model: any;
+  public $relationLink: String;
+
+  constructor(model) {
+    super();
+    this.$model = model;
+  }
+
+  $build() {
+    var one = new this.$model();
+    one.$scope = this;
+    return one;
+  }
+}
