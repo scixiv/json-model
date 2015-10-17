@@ -20,7 +20,7 @@ export function resourcify(targ: any, resObj: any) {
   }
 
   if (targ.type !== resObj.type) {
-    throw 'source type not match: ' + resObj.type + ' != ' + targ.type;
+    console.log('source type not match: ' + resObj.type + ' != ' + targ.type);
   }
 
   if (resObj.hasOwnProperty('attributes')) {
@@ -95,7 +95,8 @@ function setRaltion(targ, relats) {
 
 export function decodeSingle(targ: any, jsonObj: any) {
   if (!jsonObj.hasOwnProperty('data')) {
-    throw 'invalid single json: missing top "data" attribute';
+    console.log('invalid single json: missing top "data"', jsonObj);
+    return
   }
 
   if (jsonObj.hasOwnProperty('included')) {
@@ -116,7 +117,8 @@ export function decodeSingle(targ: any, jsonObj: any) {
 
 export function decodeList(collections: any, jsonList: any) {
   if (!jsonList.hasOwnProperty('data')) {
-    throw 'invalid list json: missing top "data" attribute';
+    console.log('invalid list json: missing top "data"', jsonList);
+    return
   }
 
   collections.splice(0, collections.length);
