@@ -211,6 +211,10 @@ export class Base {
   }
 
   $on(hook: string, func: any) {
+    if (!(this.$callbacks)) {
+      this.$callbacks = {};
+    }
+
     if (!(this.$callbacks[hook] instanceof Array)) {
       this.$callbacks[hook] = [];
     }
@@ -319,15 +323,15 @@ export class Base {
   }
 
   $reveal() {
-    if (typeof this.$scope == 'Array') {
+    if (this.$scope instanceof Array) {
       this.$scope.push(this);
     }
   }
 
   $addRelation(relationLink) {
-    var self: any = self;
-    var reqConf: any = { method: 'PATCH', url: relationLink };
-    reqConf.data = [self.$encode()];
+    var self: any = this;
+    var reqConf: any = { method: 'POST', url: relationLink };
+    reqConf.data = {data: [self.$encode().data]};
     self.$http(reqConf).then( function(res: any) {
       if (self.$callbacks.hasOwnProperty('afterSaveRelation')) {
         for (var key in self.$callbacks.afterSaveRelation) {
@@ -335,6 +339,7 @@ export class Base {
         }
       }
     }, function (err) {
+      console.log('addRelation error', err)
       if (self.$callbacks.hasOwnProperty('afterSaveRelationError')) {
         for (var key in self.$callbacks.afterSaveRelationError) {
           self.$callbacks.afterSaveRelationError[key](self, err);
@@ -369,15 +374,55 @@ Base.prototype.$callbacks = {afterSave: []};
 class Collection extends Array<Base> {
   public $model: any;
   public $relationLink: String;
+  public $callbacks: any;
 
   constructor(model) {
     super();
     this.$model = model;
+    var $callbacks: any = {};
+    assign($callbacks, this.$callbacks);
+    this.$callbacks = $callbacks;
   }
 
   $build() {
     var one = new this.$model();
     one.$scope = this;
     return one;
+  }
+
+  $search(params: any) {
+    var reqConf: any = {method: undefined, url: undefined};
+    var self: any = this;
+
+    reqConf.method = 'GET';
+    reqConf.params = params;
+    reqConf.url = self.$model.prototype.url;
+
+    self.$model.prototype.$http(reqConf).then( function(res: any) {
+      decodeList(self, res.data);
+
+      if (self.$callbacks.hasOwnProperty('afterFetchAll')) {
+        for (var key in self.$callbacks.afterFetchAll) {
+          self.$callbacks.afterFetchAll[key](self, res);
+        }
+      }
+    }, function (err) {
+      console.log('search err', err);
+      console.log('search err obj', self);
+    });
+
+    return self;
+  }
+
+  $on(hook: string, func: any) {
+    if (!(this.$callbacks)) {
+      this.$callbacks = {};
+    }
+
+    if (!(this.$callbacks[hook] instanceof Array)) {
+      this.$callbacks[hook] = [];
+    }
+
+    this.$callbacks[hook].unshift(func);
   }
 }
