@@ -184,9 +184,6 @@ export function encodeList(src: any): Object {
 
 export class Base {
   id: string;
-  url: string;
-  type: string;
-  $http: any;
   public $relationships;
   public $callbacks;
   public $scope;
@@ -197,9 +194,8 @@ export class Base {
 
   constructor(id: number|string) {
     if (id) { this.id = id.toString(); }
-    var $callbacks: any = {};
-    assign($callbacks, this.$callbacks);
-    this.$callbacks = $callbacks;
+    var model = <typeof Base>this.constructor
+    this.$callbacks = model.$callbacks;
     for (var key in this.$relationships) {
       if (this.$relationships[key].list) {
         this[key] = []
@@ -221,8 +217,9 @@ export class Base {
     this.$callbacks[hook].unshift(func);
   }
 
-  $url() {
-    return this.url + '/' + this.id;
+  get url() {
+    var model = <typeof Base>this.constructor
+    return model.url + '/' + this.id;
   }
 
   $save() {
@@ -230,10 +227,10 @@ export class Base {
     var reqConf: any = {method: undefined, url: undefined};
     if (typeof self.id !== 'undefined') {
       reqConf.method = 'PATCH';
-      reqConf.url = self.$url();
+      reqConf.url = self.url;
     } else {
       reqConf.method = 'POST';
-      reqConf.url = self.url;
+      reqConf.url = self.constructor.url;
     }
     reqConf.data = self.$encode();
     self.$http(reqConf).then(function(res: any) {
@@ -251,6 +248,15 @@ export class Base {
     })
   }
 
+  static http;
+  static $http(conf) {
+    return Base.http(conf);
+  }
+
+  $http(conf) {
+    return Base.http(conf);
+  }
+
   static $search(params: any) {
     var reqConf: any = {method: undefined, url: undefined};
     var self: any = this;
@@ -258,9 +264,9 @@ export class Base {
 
     reqConf.method = 'GET';
     reqConf.params = params;
-    reqConf.url = this.prototype.url;
+    reqConf.url = this.url;
 
-    this.prototype.$http(reqConf).then( function(res: any) {
+    this.$http(reqConf).then( function(res: any) {
       decodeList(collections, res.data);
     }, function (err) {
       console.log('search err', err);
@@ -285,7 +291,7 @@ export class Base {
   $fetch() {
     var reqConf: any = {method: undefined, url: undefined};
     reqConf.method = 'GET';
-    reqConf.url = this.$url();
+    reqConf.url = this.url;
     var self: any = this;
     this.$then = this.$http(reqConf).then( function(res: any) {
       self.$decode(res.data);
@@ -303,7 +309,7 @@ export class Base {
   $destroy() {
     var reqConf: any = {method: undefined, url: undefined};
     reqConf.method = 'DELETE';
-    reqConf.url = this.$url();
+    reqConf.url = this.url;
     var self: any = this;
     this.$http(reqConf).then( function(res: any) {
       if (self.$callbacks.hasOwnProperty('afterDestroy')) {
@@ -367,9 +373,14 @@ export class Base {
       }
     });
   }
-}
 
-Base.prototype.$callbacks = {afterSave: []};
+  get type(): string {
+    return 'bases'
+  }
+
+  static url = 'http://localhost:3000';
+  static $callbacks = {afterSave: []};
+}
 
 class Collection extends Array<Base> {
   public $model: any;
@@ -396,9 +407,9 @@ class Collection extends Array<Base> {
 
     reqConf.method = 'GET';
     reqConf.params = params;
-    reqConf.url = self.$model.prototype.url;
+    reqConf.url = self.$model.url;
 
-    self.$model.prototype.$http(reqConf).then( function(res: any) {
+    self.$model.$http(reqConf).then( function(res: any) {
       decodeList(self, res.data);
 
       if (self.$callbacks.hasOwnProperty('afterFetchAll')) {
