@@ -198,8 +198,7 @@ export class Base {
     this.$callbacks = model.$callbacks;
     for (var key in this.$relationships) {
       if (this.$relationships[key].list) {
-        this[key] = []
-        this[key].$model = this.$relationships[key].model;
+        this[key] = new Collection(this.$relationships[key].model);
       } else {
         this[key] = new this.$relationships[key].model();
       }
