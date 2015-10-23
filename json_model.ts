@@ -260,18 +260,7 @@ export class Base {
     var reqConf: any = {method: undefined, url: undefined};
     var self: any = this;
     var collections: any = new Collection(this);
-
-    reqConf.method = 'GET';
-    reqConf.params = params;
-    reqConf.url = this.url;
-
-    this.$http(reqConf).then( function(res: any) {
-      decodeList(collections, res.data);
-    }, function (err) {
-      console.log('search err', err);
-      console.log('search err obj', self);
-    });
-
+    collections.$search(params);
     return collections;
   }
 
@@ -385,6 +374,7 @@ class Collection extends Array<Base> {
   public $model: any;
   public $relationLink: String;
   public $callbacks: any;
+  public $then: any;
 
   constructor(model) {
     super();
@@ -408,7 +398,7 @@ class Collection extends Array<Base> {
     reqConf.params = params;
     reqConf.url = self.$model.url;
 
-    self.$model.$http(reqConf).then( function(res: any) {
+    this.$then = self.$model.$http(reqConf).then( function(res: any) {
       decodeList(self, res.data);
 
       if (self.$callbacks.hasOwnProperty('afterFetchAll')) {
