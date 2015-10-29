@@ -195,7 +195,8 @@ export class Base {
   constructor(id: number|string) {
     if (id) { this.id = id.toString(); }
     var model = <typeof Base>this.constructor
-    this.$callbacks = model.$callbacks;
+    this.$callbacks = {};
+    assign(this.$callbacks, model.$callbacks);
     for (var key in this.$relationships) {
       if (this.$relationships[key].list) {
         this[key] = new Collection(this.$relationships[key].model);
@@ -322,6 +323,27 @@ export class Base {
     }
   }
 
+  $updateRelation(relationName) {
+    var self: any = this;
+    var relationLink:string = self.url + '/relationships/' + relationName
+    var reqConf: any = { method: 'PATCH', url: relationLink };
+    reqConf.data = {data: self[relationName].$encode().data};
+    self.$http(reqConf).then( function(res: any) {
+      if (self.$callbacks.hasOwnProperty('afterUpdateRelation')) {
+        for (var key in self.$callbacks.afterUpdateRelation) {
+          self.$callbacks.afterUpdateRelation[key](self, res);
+        }
+      }
+    }, function (err) {
+      console.log('addRelation error', err)
+      if (self.$callbacks.hasOwnProperty('afterUpdateRelationError')) {
+        for (var key in self.$callbacks.afterUpdateRelationError) {
+          self.$callbacks.afterUpdateRelationError[key](self, err);
+        }
+      }
+    });
+  }
+
   $addRelation(relationLink) {
     var self: any = this;
     var reqConf: any = { method: 'POST', url: relationLink };
@@ -424,5 +446,9 @@ class Collection extends Array<Base> {
     }
 
     this.$callbacks[hook].unshift(func);
+  }
+
+  $encode() {
+    return encodeList(self)
   }
 }
