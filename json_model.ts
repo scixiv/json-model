@@ -123,6 +123,13 @@ export function decodeList(collections: any, jsonList: any) {
 
   collections.splice(0, collections.length);
 
+  if (jsonList.hasOwnProperty('included')) {
+    for (var i = 0; i < jsonList.data.length; i++) {
+      includify(jsonList.data[i].relationships, jsonList.included);
+      collections.$included = jsonList.included;
+    };
+  }
+
   for (var i = 0; i < jsonList.data.length; i++) {
     var one = new collections.$model();
     resourcify(one, jsonList.data[i]);
